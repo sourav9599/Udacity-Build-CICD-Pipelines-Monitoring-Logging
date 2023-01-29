@@ -1,17 +1,15 @@
 version: 2.1
 
-# commands:
-#   destroy-environment:
-#     description: Destroy back-end and front-end cloudformation stacks given a workflow ID.
-#     parameters:
-#       # Add parameter here   
-#     steps:
-#       - run:
-#           name: Destroy environments
-#           when: on_fail
-#           command: |
-#             # Your code here
-#             exit 1
+commands:
+  destroy-environment:
+    description: Destroy back-end and front-end cloudformation stacks given a workflow ID.  
+    steps:
+      - run:
+          name: Destroy environments
+          when: on_fail
+          command: |
+            aws cloudformation delete-stack --stack-name udapeople-backend-${CIRCLE_WORKFLOW_ID:0:7}
+            aws cloudformation delete-stack --stack-name udapeople-frontend-${CIRCLE_WORKFLOW_ID:0:7}
 
 #   revert-migrations:
 #     description: Revert the last migration if successfully run in the current workflow.
@@ -100,6 +98,9 @@ jobs:
       - image: cimg/node:13.8.0
     steps:
       - checkout
+      - add_ssh_keys:
+          fingerprints:
+            - "18:64:6e:f7:ec:53:a8:6a:d8:54:9a:5c:f3:8e:05:84"
       - restore_cache:
           keys: [frontend-build]
       - run:
@@ -109,12 +110,21 @@ jobs:
             npm install
             # npm install oauth-sign@^0.9.0
             npm audit fix --audit-level=critical --force
+            # git config user.email "sourav10mohanty@gmail.com"
+            # git config user.name "CircleCI Job"
+            # git checkout main
+            # git commit --allow-empty -am "Audit fix frontend commit from CircleCI [skip ci]"
+            # ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
+            # git push origin main
 
   scan-backend:
     docker:
       - image: cimg/node:13.8.0
     steps:
       - checkout
+      - add_ssh_keys:
+          fingerprints:
+            - "18:64:6e:f7:ec:53:a8:6a:d8:54:9a:5c:f3:8e:05:84"
       - restore_cache:
           keys: [backend-build]
       - run:
@@ -124,41 +134,50 @@ jobs:
             npm install
             # npm install oauth-sign@^0.9.0
             npm audit fix --audit-level=critical --force
-            # npm audit --audit-level=critical
+            # git config user.email "sourav10mohanty@gmail.com"
+            # git config user.name "CircleCI Job"
+            # git checkout main
+            # git commit --allow-empty -am "Audit fix backend commit from CircleCI [skip ci]"
+            # ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
+            # git push origin main
 
-#   deploy-infrastructure:
-#     docker:
-#       # Docker image here that supports AWS CLI
-#     steps:
-#       # Checkout code from git
-#       - run:
-#           name: Ensure back-end infrastructure exists
-#           command: |
-#             aws cloudformation deploy \
-#               --template-file .circleci/files/backend.yml \
-#               #--tags project=your-tag \
-#               # --stack-name "your back-end stack name with workflow id" \
-#               # --parameter-overrides ID="your workflow id"  
-#               exit 1
-#       - run:
-#           name: Ensure front-end infrastructure exist
-#           command: |
-#             aws cloudformation deploy \
-#               --template-file .circleci/files/frontend.yml \
-#               #--tags project=your-tag \
-#               # --stack-name "your front-end stack name with workflow id" \
-#               # --parameter-overrides ID="your workflow id"  
-#               exit 1
-#       - run:
-#           name: Add back-end ip to ansible inventory
-#           command: |
-#             # Your code here
-#             exit 1
-#       - persist_to_workspace:
-#           root: ~/
-#           paths:
-#             - project/.circleci/ansible/inventory.txt
-#       # Here's where you will add some code to rollback on failure      
+  deploy-infrastructure:
+    docker:
+      - image: amazon/aws-cli
+    steps:
+      - checkout
+      - run:
+          name: Ensure back-end infrastructure exists
+          command: |
+            aws cloudformation deploy \
+              --template-file .circleci/files/backend.yml \
+              --stack-name "udapeople-backend-${CIRCLE_WORKFLOW_ID:0:7}" \
+              --parameter-overrides ID="${CIRCLE_WORKFLOW_ID:0:7}"  \
+              --tags project=udapeople
+      - run:
+          name: Ensure front-end infrastructure exist
+          command: |
+            aws cloudformation deploy \
+              --template-file .circleci/files/frontend.yml \
+              --stack-name "udapeople-frontend-${CIRCLE_WORKFLOW_ID:0:7}" \
+              --parameter-overrides ID="${CIRCLE_WORKFLOW_ID:0:7}"  \
+              --tags project=udapeople 
+      - run:
+          name: Add back-end ip to ansible inventory
+          command: |
+            touch inventory.txt
+            echo [backend-ip] > inventory.txt
+            aws ec2 describe-instances \
+              --query 'Reservations[*].Instances[*].PublicIpAddress' \
+              --filters "Name=tag:Name,Values=backend-${CIRCLE_WORKFLOW_ID:0:7}" \
+              --output text >> inventory.txt
+            cp inventory.txt .circleci/ansible/inventory.txt
+      - persist_to_workspace:
+          root: .circleci/ansible
+          paths:
+            - inventory.txt
+      - destroy_environment
+      # Here's where you will add some code to rollback on failure      
 
 #   configure-infrastructure:
 #     docker:
@@ -305,11 +324,11 @@ workflows:
           requires: [build-backend]
       - scan-frontend:
           requires: [build-frontend]
-      # - deploy-infrastructure:
-      #     requires: [test-frontend, test-backend, scan-frontend, scan-backend]
-      #     filters:
-      #       branches:
-      #         only: [test-feature-branch]
+      - deploy-infrastructure:
+          requires: [test-frontend, test-backend, scan-frontend, scan-backend]
+          filters:
+            branches:
+              only: [main]
       # - configure-infrastructure:
       #     requires: [deploy-infrastructure]
       # - run-migrations:
