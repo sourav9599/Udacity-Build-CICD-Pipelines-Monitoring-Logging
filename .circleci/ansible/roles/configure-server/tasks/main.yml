@@ -13,12 +13,7 @@
   apt:
     autoremove: yes
 
-- name: "Fetch NodeJs from Nodesource"
-  become: true
-  shell: |
-    curl -sL https://deb.nodesource.com/setup_13.x | sudo -E bash -
-
-- name: "Install NodeJs 13.X"
+- name: "Install Node and npm"
   become: true
   apt:
     name: ["nodejs","npm"]
@@ -29,3 +24,5 @@
   npm:
     name: pm2
     global: yes
+    production: yes
+    state: present
