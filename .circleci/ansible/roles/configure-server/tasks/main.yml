@@ -1,0 +1,31 @@
+---
+- name: "update apt packages"
+  become: true
+  become_method: sudo
+  apt:
+    update_cache: yes
+- name: "upgrade apt packages"
+  become: true
+  apt:
+    upgrade: yes
+- name: "Remove dependencies that are no longer required"
+  become: true
+  apt:
+    autoremove: yes
+
+- name: "Fetch NodeJs from Nodesource"
+  become: true
+  shell: |
+    curl -sL https://deb.nodesource.com/setup_13.x | sudo -E bash -
+
+- name: "Install NodeJs 13.X"
+  become: true
+  apt:
+    name: ["nodejs","npm"]
+    state: latest
+    update_cache: yes
+
+- name: "Install PM2 Globally"
+  npm:
+    name: pm2
+    global: yes
