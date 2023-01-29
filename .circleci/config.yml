@@ -1,19 +1,16 @@
 version: 2.1
-orbs:
-  # Choose either one of the orbs below
-  # Declare a dependency on the welcome-orb
-  # welcome: circleci/welcome-orb@0.4.1
-  aws-cli: circleci/aws-cli@2.0.3
-
 commands:
   destroy-environment:
     description: Destroy back-end and front-end cloudformation stacks given a workflow ID.
+    id:
+        type: string
+        default: ${CIRCLE_WORKFLOW_ID:0:7}
     steps:
       - run:
           name: Destroy environments
           command: |
-            aws cloudformation delete-stack --stack-name udapeople-backend-${CIRCLE_WORKFLOW_ID:0:7}
-            aws cloudformation delete-stack --stack-name udapeople-frontend-${CIRCLE_WORKFLOW_ID:0:7}
+            aws cloudformation delete-stack --stack-name "udapeople-backend-<<parameters.id>>"
+            aws cloudformation delete-stack --stack-name "udapeople-frontend-<<parameters.id>>"
           when: on_fail
 
 #   revert-migrations:
@@ -104,8 +101,7 @@ jobs:
     steps:
       - checkout
       - add_ssh_keys:
-          fingerprints:
-            - "18:64:6e:f7:ec:53:a8:6a:d8:54:9a:5c:f3:8e:05:84"
+          fingerprints: ["18:64:6e:f7:ec:53:a8:6a:d8:54:9a:5c:f3:8e:05:84"]
       - restore_cache:
           keys: [frontend-build]
       - run:
@@ -115,12 +111,15 @@ jobs:
             npm install
             # npm install oauth-sign@^0.9.0
             npm audit fix --audit-level=critical --force
-            # git config user.email "sourav10mohanty@gmail.com"
-            # git config user.name "CircleCI Job"
-            # git checkout main
-            # git commit --allow-empty -am "Audit fix frontend commit from CircleCI [skip ci]"
-            # ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
-            # git push origin main
+      # - run:
+      #     name: Commit Audit Fixes to Repository
+      #     command: |
+      #       git config user.email "sourav10mohanty@gmail.com"
+      #       git config user.name "CircleCI Job"
+      #       git checkout main
+      #       git commit --allow-empty -am "Audit fix frontend commit from CircleCI [skip ci]"
+      #       ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
+      #       git push origin main
 
   scan-backend:
     docker:
@@ -128,8 +127,7 @@ jobs:
     steps:
       - checkout
       - add_ssh_keys:
-          fingerprints:
-            - "18:64:6e:f7:ec:53:a8:6a:d8:54:9a:5c:f3:8e:05:84"
+          fingerprints: ["18:64:6e:f7:ec:53:a8:6a:d8:54:9a:5c:f3:8e:05:84"]
       - restore_cache:
           keys: [backend-build]
       - run:
@@ -139,12 +137,15 @@ jobs:
             npm install
             # npm install oauth-sign@^0.9.0
             npm audit fix --audit-level=critical --force
-            # git config user.email "sourav10mohanty@gmail.com"
-            # git config user.name "CircleCI Job"
-            # git checkout main
-            # git commit --allow-empty -am "Audit fix backend commit from CircleCI [skip ci]"
-            # ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
-            # git push origin main
+      # - run:
+      #     name: Commit Audit Fixes to Repository
+      #     command: |
+      #       git config user.email "sourav10mohanty@gmail.com"
+      #       git config user.name "CircleCI Job"
+      #       git checkout main
+      #       git commit --allow-empty -am "Audit fix backend commit from CircleCI [skip ci]"
+      #       ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
+      #       git push origin main
 
   deploy-infrastructure:
     docker:
@@ -175,41 +176,44 @@ jobs:
           name: Add back-end ip to ansible inventory
           command: |
             touch inventory.txt
-            echo [backend-ip] > inventory.txt
+            echo [web] > inventory.txt
             aws ec2 describe-instances \
               --query 'Reservations[*].Instances[*].PublicIpAddress' \
               --filters "Name=tag:Name,Values=backend-${CIRCLE_WORKFLOW_ID:0:7}" \
               --output text >> inventory.txt
             cp inventory.txt .circleci/ansible/inventory.txt
+            cat .circleci/ansible/inventory.txt
 
       - persist_to_workspace:
           root: .circleci/ansible
           paths:
             - inventory.txt
 
-      - destroy_environment
+      # - destroy_environment
 
-  # configure-infrastructure:
-  #   docker:
-  #     # Docker image here that supports Ansible
-  #   steps:
-  #     - checkout
-  #     - add_ssh_keys:
-  #         fingerprints:
-  #           - "1a:64:bc:3f:74:a0:a8:df:fe:95:ef:49:61:58:6d:a8"
-  #     - attach_workspace:
-  #         at: .circleci/ansible
-  #     - run:
-  #         name: Install dependencies
-  #         command: |
-  #           # Your code here
-  #           exit 1
-  #     - run:
-  #         name: Configure server
-  #         command: |
-  #           # Your code here
-  #           exit 1
-  #     # Here's where you will add some code to rollback on failure
+  configure-infrastructure:
+    docker:
+      - image: cimg/base:edge
+    steps:
+      - checkout
+      - add_ssh_keys:
+          fingerprints: ["1a:64:bc:3f:74:a0:a8:df:fe:95:ef:49:61:58:6d:a8"]
+      - attach_workspace:
+          at: .circleci/ansible
+      - run:
+          name: Install dependencies
+          command: |
+            sudo apt update
+            sudo apt install tar gzip
+            sudo apt install software-properties-common
+            sudo add-apt-repository --yes --update ppa:ansible/ansible
+            sudo apt install ansible
+      - run:
+          name: Configure server
+          command: |
+            ansible-playbook -i .circleci/ansible/inventory.txt configure-server.yml
+
+      # - destroy_environment
 
 #   run-migrations:
 #     docker:
@@ -341,8 +345,8 @@ workflows:
           filters:
             branches:
               only: [main]
-      # - configure-infrastructure:
-      #     requires: [deploy-infrastructure]
+      - configure-infrastructure:
+          requires: [deploy-infrastructure]
       # - run-migrations:
       #     requires: [configure-infrastructure]
       # - deploy-frontend:
