@@ -309,8 +309,7 @@ jobs:
             npm run build
             cd ..
             tar -C backend -czvf artifact.tar.gz .
-            cd .circleci/ansible
-            ansible-playbook -i inventory.txt deploy-backend.yml
+            ansible-playbook -i .circleci/ansible/inventory.txt .circleci/ansible/deploy-backend.yml
 
       - destroy-environment
       - revert-migrations
