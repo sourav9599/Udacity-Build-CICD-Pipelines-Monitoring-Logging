@@ -5,21 +5,21 @@ commands:
   destroy-environment:
     description: Destroy back-end and front-end cloudformation stacks given a workflow ID.
     parameters:
-      id:
+      workflow_id:
         type: string
         default: ${CIRCLE_WORKFLOW_ID:0:7}
     steps:
       - run:
           name: Destroy environments
           command: |
-            aws cloudformation delete-stack --stack-name "udapeople-backend-<<parameters.id>>"
-            aws cloudformation delete-stack --stack-name "udapeople-frontend-<<parameters.id>>"
+            aws cloudformation delete-stack --stack-name "udapeople-backend-<<parameters.workflow_id>>"
+            aws cloudformation delete-stack --stack-name "udapeople-frontend-<<parameters.workflow_id>>"
           when: on_fail
 
   revert-migrations:
     description: Revert the last migration if successfully run in the current workflow.
     parameters:
-      id:
+      workflow_id:
         type: string
         default: ${CIRCLE_WORKFLOW_ID:0:7}
     steps:
@@ -27,10 +27,10 @@ commands:
           name: Revert migrations
           when: on_fail
           command: |
-            SUCCESS=$(curl --insecure  https://kvdb.io/SzNEf36beKUggkW2xjgDKL/migration_<< parameters.id >>)
+            SUCCESS=$(curl --insecure  https://kvdb.io/SzNEf36beKUggkW2xjgDKL/migration_<< parameters.workflow_id >>)
             if(( $SUCCESS==1 ));
             then
-              cd ~/project/backend
+              cd backend
               npm install
               npm run migrations:revert
             fi
@@ -81,7 +81,6 @@ jobs:
           name: Front-end test
           command: |
             cd frontend
-            npm install
             npm run test
 
   test-backend:
@@ -95,7 +94,6 @@ jobs:
           name: Back-end test
           command: |
             cd backend
-            npm install
             npm run test
 
   scan-frontend:
@@ -111,7 +109,6 @@ jobs:
           name: Front-end analyze
           command: |
             cd frontend
-            npm install
             # npm install oauth-sign@^0.9.0
             npm audit fix --audit-level=critical --force
       # - run:
@@ -137,7 +134,6 @@ jobs:
           name: Back-end analyze
           command: |
             cd backend
-            npm install
             # npm install oauth-sign@^0.9.0
             npm audit fix --audit-level=critical --force
       # - run:
@@ -192,7 +188,8 @@ jobs:
           paths:
             - inventory.txt
 
-      - destroy-environment
+      - destroy-environment:
+          workflow_id: "${CIRCLE_WORKFLOW_ID:0:7}"
 
   configure-infrastructure:
     docker:
@@ -200,7 +197,7 @@ jobs:
     steps:
       - checkout
       - add_ssh_keys:
-          fingerprints: ["1a:64:bc:3f:74:a0:a8:df:fe:95:ef:49:61:58:6d:a8"]
+          fingerprints: ["6a:3f:93:ab:0a:4d:d6:db:67:73:11:2e:66:2c:2d:af"]
       - attach_workspace:
           at: .circleci/ansible
       - run:
@@ -219,7 +216,8 @@ jobs:
           command: |
             ansible-playbook -i .circleci/ansible/inventory.txt .circleci/ansible/configure-server.yml
 
-      - destroy-environment
+      - destroy-environment:
+          workflow_id: "${CIRCLE_WORKFLOW_ID:0:7}"
 
   run-migrations:
     docker:
@@ -246,8 +244,10 @@ jobs:
             then
                 curl --insecure https://kvdb.io/SzNEf36beKUggkW2xjgDKL/migration_${CIRCLE_WORKFLOW_ID:0:7}  -d '1'
             fi
-      - destroy-environment
-      - revert-migrations
+      - destroy-environment:
+          workflow_id: "${CIRCLE_WORKFLOW_ID:0:7}"
+      - revert-migrations:
+          workflow_id: "${CIRCLE_WORKFLOW_ID:0:7}"
 
   deploy-frontend:
     docker:
@@ -287,7 +287,7 @@ jobs:
     steps:
       - checkout
       - add_ssh_keys:
-          fingerprints: ["1a:64:bc:3f:74:a0:a8:df:fe:95:ef:49:61:58:6d:a8"]
+          fingerprints: ["6a:3f:93:ab:0a:4d:d6:db:67:73:11:2e:66:2c:2d:af"]
       - attach_workspace:
           at: .circleci/ansible
       - run:
@@ -313,8 +313,10 @@ jobs:
             cp artifact.tar.gz .circleci/ansible/roles/deploy/files/artifact.tar.gz
             ansible-playbook -i .circleci/ansible/inventory.txt .circleci/ansible/deploy-backend.yml
 
-      - destroy-environment
-      - revert-migrations
+      - destroy-environment:
+          workflow_id: "${CIRCLE_WORKFLOW_ID:0:7}"
+      - revert-migrations:
+          workflow_id: "${CIRCLE_WORKFLOW_ID:0:7}"
 
   smoke-test:
     docker:
@@ -332,9 +334,8 @@ jobs:
       - run:
           name: Backend smoke test.
           command: |
-            export BACKEND_IP=$(sed -n '2p' .circleci/ansible/inventory.txt)
-            export API_URL="http://${BACKEND_IP}:3030"
-            echo "${API_URL}"
+            BACKEND_IP=$(aws cloudformation describe-stacks --stack-name udapeople-backend-"${CIRCLE_WORKFLOW_ID:0:7}" --query "Stacks[0].Outputs[0].OutputValue" --output text)
+            API_URL="http://${BACKEND_IP}:3030"
             if curl "${API_URL}/api/status" | grep "ok"
             then
               exit 0
@@ -344,7 +345,7 @@ jobs:
       - run:
           name: Frontend smoke test.
           command: |
-            URL="http://udapeople-${CIRCLE_WORKFLOW_ID:0:7}.s3-website-us-east-1.amazonaws.com/#/employees"
+            URL="http://udapeople-${CIRCLE_WORKFLOW_ID:0:7}.s3-website-us-east-1.amazonaws.com"
             echo ${URL}
             if curl -s ${URL} | grep "Welcome"
             then
@@ -352,8 +353,10 @@ jobs:
             else
               exit 1
             fi
-      - destroy-environment
-      - revert-migrations
+      - destroy-environment:
+          workflow_id: "${CIRCLE_WORKFLOW_ID:0:7}"
+      - revert-migrations:
+          workflow_id: "${CIRCLE_WORKFLOW_ID:0:7}"
 
   cloudfront-update:
     docker:
@@ -389,8 +392,10 @@ jobs:
               --stack-name InitialStack \
               --parameter-overrides WorkflowID="${CIRCLE_WORKFLOW_ID:0:7}" \
               --tags project=udapeople
-      - destroy-environment
-      - revert-migrations
+      - destroy-environment:
+          workflow_id: "${CIRCLE_WORKFLOW_ID:0:7}"
+      - revert-migrations:
+          workflow_id: "${CIRCLE_WORKFLOW_ID:0:7}"
 
   cleanup:
     docker:
